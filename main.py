@@ -58,6 +58,7 @@ def retrieve_node(state: GraphState):
             
             if tool_name == retriever_tool.name:
                 # Execute the tool
+                print("calling tool")
                 result = retriever_tool.invoke(tool_args)
                 tool_messages.append(
                     ToolMessage(
