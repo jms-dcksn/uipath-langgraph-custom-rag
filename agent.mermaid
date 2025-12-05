@@ -5,12 +5,14 @@ flowchart TB
   generate_query_or_respond(generate_query_or_respond)
   rewrite_question(rewrite_question)
   generate_answer(generate_answer)
+  output(output)
   __end__(__end__)
   __start__ --> initialize
-  generate_query_or_respond --> __end__
+  generate_answer --> output
+  generate_query_or_respond --> |__end__|output
   generate_query_or_respond --> |tools|retrieve
   initialize --> generate_query_or_respond
   retrieve --> generate_answer
   retrieve --> rewrite_question
   rewrite_question --> generate_query_or_respond
-  generate_answer --> __end__
+  output --> __end__

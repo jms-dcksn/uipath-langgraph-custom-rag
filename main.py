@@ -30,12 +30,12 @@ class BinaryGrade(BaseModel):
         description="'yes' or 'no' based on whether the response is relevant"
         )
 
-retriever = ContextGroundingRetriever(index_name = "LoanStateRequirements")
+retriever = ContextGroundingRetriever(index_name = "ClaimsPC_SOP", folder_path="Shared/FINS")
 retriever_tool = create_retriever_tool(
     retriever,
-    "ContextforStateRequirements",
+    "ClaimsProcessingStandardOperatingProcedures",
    """
-   Use this tool to search for state by state requirements for documents need to process loan applications.
+   Use this tool to search for details on handling property and casualty claims and eligibility requirements.
    """
 )
 
@@ -75,6 +75,7 @@ def initialize(input: GraphInput) -> GraphState:
 
 def generate_query_or_respond(state: GraphState):
     """LLM will decide to call context grounding or directly respond"""
+    print(retriever_tool.name)
     response = llm.bind_tools([retriever_tool]).invoke(state["messages"])
     return {"messages": [response]}
 
@@ -142,20 +143,21 @@ def generate_answer(state: GraphState):
     context = tool_messages[-1].content if tool_messages else ""
     prompt = GENERATE_PROMPT.format(question=question, context=context)
     response = llm.invoke([{"role": "user", "content": prompt}])
-    return {"response": response.content}
+    return {"messages": [response]}
 
+def output_node(state: GraphState) -> GraphOutput:
+    """Final output node that returns GraphOutput."""
 
-# Create a function to transform final state to output
-def output_reducer(state: GraphState) -> GraphOutput:
-    return GraphOutput(response=state.get("response", ""))
+    return GraphOutput(response=state["messages"][-1].content)
 
-builder = StateGraph(state_schema=GraphState, input=GraphInput, output=output_reducer)
+builder = StateGraph(state_schema=GraphState, input=GraphInput, output=GraphOutput)
 
 builder.add_node("initialize", initialize)
 builder.add_node("retrieve", retrieve_node)
 builder.add_node("generate_query_or_respond", generate_query_or_respond)
 builder.add_node("rewrite_question", rewrite_question)
 builder.add_node("generate_answer", generate_answer)
+builder.add_node("output", output_node)
 
 builder.add_edge(START, "initialize")
 builder.add_edge("initialize", "generate_query_or_respond")
@@ -164,7 +166,7 @@ builder.add_conditional_edges(
     tools_condition,
     {
         "tools": "retrieve",
-        "__end__": END,
+        "__end__": "output",
     }
 )
 builder.add_edge("rewrite_question", "generate_query_or_respond")
@@ -177,7 +179,8 @@ builder.add_conditional_edges(
         "rewrite_question": "rewrite_question",
     }
 )
-builder.add_edge("generate_answer", END)
+builder.add_edge("generate_answer", "output")
+builder.add_edge("output", END)
 
 
 graph = builder.compile()
